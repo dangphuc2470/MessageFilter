@@ -17,7 +17,10 @@ Modern Android users rely on multiple communication platforms daily, including W
 3. **Wearable and Smartwatch Redundancy:**  
    Smartwatches and fitness bands (Garmin, Wear OS, Amazfit) mirror every notification received on the phone. Background system tasks, backup reminders ("WhatsApp Web is active", "Checking for new messages"), and duplicate alerts trigger continuous unnecessary vibrations on wrists.
 
-4. **Privacy Concerns with Cloud-Based Filters:**  
+4. **Group Chat Backlog Flooding (The "Old Message Wall" on Wearables):**  
+   When a user has unread messages in an active group chat (such as WhatsApp, Telegram, or Zalo), the origin application bundles the entire accumulated backlog of unread messages into every subsequent notification update. Because smartwatches (Garmin, Wear OS, Amazfit) and lock screens have strict display height and character limits, they frequently render notifications starting from the top of the text block. As a result, every single incoming message causes the smartwatch to vibrate only to show the oldest unread messages repeatedly, while the actual newest message remains truncated or pushed completely out of view.
+
+5. **Privacy Concerns with Cloud-Based Filters:**  
    Most third-party notification organizers or SMS managers route messages through external cloud servers to parse text or apply machine learning models, posing severe security risks to sensitive communications and financial OTPs.
 
 **Message Filter & Forwarder was created to solve these challenges with an absolute guarantee of local, on-device processing and granular per-application control.**
@@ -38,16 +41,21 @@ Each messaging app installed on the device can be independently assigned one of 
 - Supports prefixed codes (such as Google's `G-XXXXXX`, Facebook's `FB-XXXXX`, bank transaction codes), explicit assignment patterns (`Code is 123456`, `Mã xác minh là 123456`), and standalone numeric sequences.
 - Attaches an interactive **"Copy [CODE]"** button directly into the notification banner, allowing one-tap clipboard copying without opening the app or navigating away from the current screen.
 
-### 3. Integrated Action Forwarding (Mark as Read & Direct Reply)
+### 3. Smartwatch-Optimized Group Chat Parsing (Latest-Message Isolation)
+- Solves the notorious "old message wall" problem on smartwatches and lock screens.
+- Inspects underlying `MessagingStyle` and `android.messages` parcel bundles to isolate strictly the single latest incoming message, attributing the active sender cleanly (`Sender: Message`).
+- Prevents smartwatches (Garmin, Wear OS, Amazfit) from rendering repeated backlogs of stale text, ensuring that when your wrist vibrates, you always see the actual newest message immediately at the top.
+
+### 4. Integrated Action Forwarding (Mark as Read & Direct Reply)
 - Preserves native messaging capabilities by extracting standard, wearable, and invisible actions from original notifications.
 - Users can reply directly from the forwarded notification banner using Android `RemoteInput`, or dismiss the alert while triggering "Mark as Read" in the origin application.
 
-### 4. Built-in Notification History & Search
+### 5. Built-in Notification History & Search
 - Logs processed notifications into a local database for review.
 - Filter history entries by status (All, Forward, Filter, Block, Normal) or search by sender and message content.
 - Individual messages or the entire history can be purged at any time.
 
-### 5. Interactive In-App Simulator
+### 6. Interactive In-App Simulator
 - Includes a built-in message simulator to test custom blacklist keywords and OTP extraction patterns against simulated alerts before applying them to real conversations.
 
 ---
