@@ -1,0 +1,28 @@
+*.iml
+.gradle
+local.properties
+/local.properties
+
+# Android Studio / IntelliJ IDEA
+.idea/
+/.idea
+.kotlin/
+
+# Build artifacts
+build/
+/build
+**/build/
+captures/
+.externalNativeBuild
+.cxx/
+*.apk
+*.aab
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Private test logs and history
+tester_logs/
+logs/
+*.log
