@@ -11,6 +11,8 @@ import com.phucdnh.messagefilter.data.CapturedMessage
 import com.phucdnh.messagefilter.data.MessageRepository
 import com.phucdnh.messagefilter.data.local.AppAction
 import com.phucdnh.messagefilter.data.local.AppFilterPreferences
+import com.phucdnh.messagefilter.util.DebounceDecision
+import com.phucdnh.messagefilter.util.GroupNotificationDebouncer
 import com.phucdnh.messagefilter.util.NotificationHelper
 import com.phucdnh.messagefilter.util.OtpExtractor
 
@@ -454,6 +456,40 @@ class MessageNotificationListenerService : NotificationListenerService() {
                     cleanMessage
                 }
 
+                // Extract avatar
+                var avatarBitmap: android.graphics.Bitmap? = null
+                try {
+                    val largeIcon = notification.getLargeIcon()
+                    val drawable = largeIcon?.loadDrawable(applicationContext)
+                    avatarBitmap = drawable?.toBitmap(192, 192)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed loading avatar: ${e.message}")
+                }
+
+                // Check On-Device AI Group Summarization & Debouncing
+                if (isGroupConversation && AppFilterPreferences.isAiSummarizeGroupsEnabled(applicationContext)) {
+                    val senderName = individualSender ?: cleanTitle
+                    val decision = GroupNotificationDebouncer.handleIncomingGroupMessage(
+                        context = applicationContext,
+                        packageName = pkgName,
+                        groupTitle = cleanTitle,
+                        sender = senderName,
+                        messageText = cleanMessage,
+                        timestamp = sbn.postTime,
+                        originalContentIntent = notification.contentIntent,
+                        avatarBitmap = avatarBitmap
+                    )
+
+                    if (decision == DebounceDecision.BUFFERED_WAITING) {
+                        Log.d(TAG, "Group message buffered for AI digest ($cleanTitle): $cleanMessage")
+                        if (AppFilterPreferences.isAutoDismissOriginalEnabled(applicationContext)) {
+                            cancelNotificationSafely(sbn)
+                        }
+                        return
+                    }
+                    Log.d(TAG, "Direct user mention detected in group ($cleanTitle). Forwarding urgently!")
+                }
+
                 // 2. Record in DB as FORWARD
                 val capturedMessage = CapturedMessage(
                     packageName = pkgName,
@@ -467,16 +503,6 @@ class MessageNotificationListenerService : NotificationListenerService() {
 
                 // 3. Distinct notification ID per conversation
                 val conversationId = (pkgName.hashCode() xor cleanTitle.hashCode()) and 0x7FFFFFFF
-
-                // Extract avatar
-                var avatarBitmap: android.graphics.Bitmap? = null
-                try {
-                    val largeIcon = notification.getLargeIcon()
-                    val drawable = largeIcon?.loadDrawable(applicationContext)
-                    avatarBitmap = drawable?.toBitmap(192, 192)
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed loading avatar: ${e.message}")
-                }
 
                 // Extract "Mark as Read" and "Reply" actions from standard, wearable, and invisible actions
                 var markAsReadPendingIntent: android.app.PendingIntent? = null

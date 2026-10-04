@@ -40,6 +40,10 @@ object NotificationHelper {
     private const val SILENT_CHANNEL_NAME = "Filtered Notifications Summary"
     private const val SILENT_CHANNEL_DESC = "Silent notification summarizing blocked/filtered messages"
 
+    const val AI_DIGEST_CHANNEL_ID = "ai_group_digest_channel"
+    private const val AI_DIGEST_CHANNEL_NAME = "AI Group Digest"
+    private const val AI_DIGEST_CHANNEL_DESC = "Smart summaries of busy group chats powered by on-device AI"
+
     const val FILTERED_SUMMARY_NOTIFICATION_ID = 99999
     private val filteredCount = AtomicInteger(0)
 
@@ -126,6 +130,13 @@ object NotificationHelper {
                 setShowBadge(false)
             }
             notificationManager.createNotificationChannel(silentChannel)
+
+            val digestChannel = NotificationChannel(AI_DIGEST_CHANNEL_ID, AI_DIGEST_CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = AI_DIGEST_CHANNEL_DESC
+                enableVibration(true)
+                setShowBadge(true)
+            }
+            notificationManager.createNotificationChannel(digestChannel)
         }
     }
 
@@ -459,6 +470,72 @@ object NotificationHelper {
     fun clearConversation(conversationKey: String) {
         conversationHistory.remove(conversationKey)
         pinnedMentions.remove(conversationKey)
+    }
+
+    fun showGroupDigestNotification(
+        context: Context,
+        notificationId: Int,
+        packageName: String,
+        groupTitle: String,
+        summaryText: String,
+        messageCount: Int,
+        originalContentIntent: PendingIntent? = null,
+        avatarBitmap: Bitmap? = null
+    ) {
+        createNotificationChannel(context)
+
+        val isSilent = com.phucdnh.messagefilter.data.local.AppFilterPreferences.isAiSilentDigest(context)
+        val channelToUse = if (isSilent) SILENT_CHANNEL_ID else AI_DIGEST_CHANNEL_ID
+        val brandColor = getAppBrandColor(packageName)
+        val appName = getAppLabel(context, packageName)
+        val title = "[Tóm tắt AI] $groupTitle ($messageCount tin)"
+
+        val bigTextStyle = NotificationCompat.BigTextStyle()
+            .setBigContentTitle(title)
+            .bigText(summaryText)
+
+        // Action: "Đã đọc" (Mark as Read / Dismiss)
+        val readIntent = Intent(context, MarkAsReadReceiver::class.java).apply {
+            action = MarkAsReadReceiver.ACTION_MARK_AS_READ
+            putExtra(MarkAsReadReceiver.EXTRA_NOTIFICATION_ID, notificationId)
+            putExtra(MarkAsReadReceiver.EXTRA_CONVERSATION_KEY, "$packageName:$groupTitle")
+        }
+        val readPending = PendingIntent.getBroadcast(
+            context,
+            notificationId xor 0x9999,
+            readIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(context, channelToUse)
+            .setSmallIcon(R.drawable.ic_chat_bubble)
+            .setColor(brandColor)
+            .setContentTitle(title)
+            .setContentText(summaryText)
+            .setStyle(bigTextStyle)
+            .setSubText(appName)
+            .setPriority(if (isSilent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setDeleteIntent(readPending)
+            .addAction(android.R.drawable.ic_menu_send, "Đã đọc", readPending)
+
+        val appIconBitmap = getAppIconBitmap(context, packageName)
+        val displayBitmap = avatarBitmap ?: appIconBitmap
+        if (displayBitmap != null) {
+            builder.setLargeIcon(displayBitmap)
+        }
+
+        if (originalContentIntent != null) {
+            builder.setContentIntent(originalContentIntent)
+        }
+
+        try {
+            NotificationManagerCompat.from(context).notify(notificationId, builder.build())
+        } catch (e: Exception) {
+            Log.w("NotificationHelper", "Failed posting AI digest notification: ${e.message}")
+        }
     }
 
     fun clearAllConversations() {

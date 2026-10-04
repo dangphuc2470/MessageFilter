@@ -72,10 +72,16 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
+import androidx.compose.material3.Switch
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import com.phucdnh.messagefilter.ai.AiSummarizerManager
+import com.phucdnh.messagefilter.ai.ModelDownloadState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -106,6 +112,7 @@ import com.phucdnh.messagefilter.ui.theme.MessageFilterTheme
 import com.phucdnh.messagefilter.util.NotificationHelper
 import com.phucdnh.messagefilter.util.OtpExtractor
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class InstalledAppInfo(
@@ -122,6 +129,7 @@ class MainActivity : ComponentActivity() {
         NotificationHelper.createNotificationChannel(this)
         MessageRepository.initialize(this)
         AppFilterPreferences.initialize(this)
+        AiSummarizerManager.initialize(this)
 
         setContent {
             MessageFilterTheme {
@@ -318,29 +326,35 @@ fun MainScreen() {
                 )
             }
 
-            // Tabs: 3 Tabs (App Filters, History & Logs, Test & Simulator)
+            // Tabs: 4 Tabs (App Filters, AI Digest, History & Logs, Test & Simulator)
             PrimaryTabRow(selectedTabIndex = selectedTabIndex) {
                 Tab(
                     selected = selectedTabIndex == 0,
                     onClick = { selectedTabIndex = 0 },
-                    text = { Text("App Filters", fontSize = 13.sp) }
+                    text = { Text("App Filters", fontSize = 12.sp) }
                 )
                 Tab(
                     selected = selectedTabIndex == 1,
                     onClick = { selectedTabIndex = 1 },
-                    text = { Text("History & Logs", fontSize = 13.sp) }
+                    text = { Text("AI Digest", fontSize = 12.sp) }
                 )
                 Tab(
                     selected = selectedTabIndex == 2,
                     onClick = { selectedTabIndex = 2 },
-                    text = { Text("Test Alert", fontSize = 13.sp) }
+                    text = { Text("History & Logs", fontSize = 12.sp) }
+                )
+                Tab(
+                    selected = selectedTabIndex == 3,
+                    onClick = { selectedTabIndex = 3 },
+                    text = { Text("Test Alert", fontSize = 12.sp) }
                 )
             }
 
             when (selectedTabIndex) {
                 0 -> AppFilterTabContent()
-                1 -> HistoryTabContent()
-                2 -> TestTabContent()
+                1 -> AiDigestTabContent()
+                2 -> HistoryTabContent()
+                3 -> TestTabContent()
             }
         }
     }
@@ -945,6 +959,451 @@ fun ActionButtonItem(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun AiDigestTabContent() {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    val aiEnabled by AppFilterPreferences.aiSummarizeGroupsFlow.collectAsState()
+    val userNicknames by AppFilterPreferences.userNicknamesFlow.collectAsState()
+    val debounceSeconds by AppFilterPreferences.debounceSecondsFlow.collectAsState()
+    val silentDigest by AppFilterPreferences.aiSilentDigestFlow.collectAsState()
+    val downloadState by AiSummarizerManager.downloadState.collectAsState()
+    val isInferring by AiSummarizerManager.isInferring.collectAsState()
+
+    var nicknamesInput by remember(userNicknames) { mutableStateOf(userNicknames) }
+    var testResultText by remember { mutableStateOf<String?>(null) }
+    var isRunningSampleTest by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // 1. Master Switch Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Tóm tắt thông minh nhóm chat",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Tự động gom tin nhắn nhóm dồn dập, dùng AI On-Device tóm tắt gọn gàng để smartwatch không bị bom rung.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Switch(
+                        checked = aiEnabled,
+                        onCheckedChange = { AppFilterPreferences.setAiSummarizeGroupsEnabled(context, it) }
+                    )
+                }
+            }
+        }
+
+        // 2. On-Device Model Management Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Mô hình AI trên máy (On-Device)",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "SmolLM2-135M-Instruct (Quantized Q4_K_M ~100MB). Xử lý hoàn toàn ngoại tuyến qua llama.cpp, không gửi dữ liệu ra mạng internet và tự động giải phóng RAM sau 2 phút.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                when (val state = downloadState) {
+                    is ModelDownloadState.NotDownloaded -> {
+                        Surface(
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Chưa tải mô hình",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    )
+                                    Text(
+                                        text = "Dung lượng tải: ~100MB (Hugging Face CDN)",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Button(
+                                    onClick = { AiSummarizerManager.startDownload(context) },
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Text("Tải mô hình", fontSize = 13.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    is ModelDownloadState.Downloading -> {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Đang tải: ${(state.progress * 100).toInt()}%",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "${state.downloadedBytes / (1024 * 1024)}MB / ${state.totalBytes / (1024 * 1024)}MB",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { state.progress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                TextButton(
+                                    onClick = { AiSummarizerManager.cancelDownload(context) }
+                                ) {
+                                    Text("Hủy tải", color = MaterialTheme.colorScheme.error)
+                                }
+                            }
+                        }
+                    }
+
+                    is ModelDownloadState.Ready -> {
+                        Surface(
+                            color = Color(0xFFE8F5E9),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "Đã sẵn sàng hoạt động cục bộ",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 14.sp,
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                        Text(
+                                            text = "Dung lượng file: ${"%.1f".format(state.fileSizeMb)} MB",
+                                            fontSize = 12.sp,
+                                            color = Color(0xFF388E3C)
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        onClick = { AiSummarizerManager.deleteModel(context) },
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        colors = ButtonDefaults.outlinedButtonColors(
+                                            contentColor = MaterialTheme.colorScheme.error
+                                        )
+                                    ) {
+                                        Text("Xóa file", fontSize = 12.sp)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    is ModelDownloadState.Error -> {
+                        Surface(
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Tải mô hình thất bại",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.error
+                                    )
+                                    Text(
+                                        text = state.error,
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                }
+                                Button(
+                                    onClick = { AiSummarizerManager.startDownload(context) },
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                ) {
+                                    Text("Thử lại", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. User Identity & Nicknames Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Tên nhận diện trong nhóm chat",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Khi có người gọi tên hoặc tag bạn trong nhóm (ví dụ: '@Phúc', 'Phúc ơi', 'anh Phúc'), app sẽ BỎ QUA gom nhóm và gửi thông báo khẩn cấp ngay lập tức đến smartwatch.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+
+                OutlinedTextField(
+                    value = nicknamesInput,
+                    onValueChange = { nicknamesInput = it },
+                    label = { Text("Tên/biệt danh (ngăn cách bằng dấu phẩy)") },
+                    placeholder = { Text("Phúc, phucdnh, anh Phúc") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            AppFilterPreferences.setUserNicknames(context, nicknamesInput)
+                            Toast.makeText(context, "Đã lưu tên nhận diện", Toast.LENGTH_SHORT).show()
+                        },
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
+                    ) {
+                        Text("Lưu tên", fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        // 4. Debounce & Silent Options Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Tùy chọn gom nhóm & Rung",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Thời gian gom tin nhắn dồn dập:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(20, 40, 60).forEach { sec ->
+                        FilterChip(
+                            selected = debounceSeconds == sec,
+                            onClick = { AppFilterPreferences.setDebounceSeconds(context, sec) },
+                            label = { Text("$sec giây") }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Thông báo tóm tắt im lặng",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "Thông báo tóm tắt chỉ hiển thị trên màn hình đồng hồ mà không làm rung tay.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Switch(
+                        checked = silentDigest,
+                        onCheckedChange = { AppFilterPreferences.setAiSilentDigest(context, it) }
+                    )
+                }
+            }
+        }
+
+        // 5. Live Test & Demonstration Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+            ),
+            shape = RoundedCornerShape(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "Chạy thử suy luận AI trực tiếp",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Thử nghiệm tóm tắt 4 tin nhắn nhóm mẫu về việc ăn trưa và xem bóng đá tối nay.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Button(
+                    onClick = {
+                        isRunningSampleTest = true
+                        testResultText = null
+                        scope.launch {
+                            val sampleMessages = listOf(
+                                "Tuấn" to "Trưa nay ăn gì mấy ông ơi?",
+                                "Huy" to "Cơm tấm sườn bì chả góc ngã tư đi, nay đang thèm.",
+                                "Tuấn" to "Ok chốt, 11h45 đi chung nha.",
+                                "Bảo" to "Tối nay nhớ coi chung kết cúp C1 lúc 2h nhé anh em."
+                            )
+                            val userNames = AppFilterPreferences.getUserNicknames(context)
+                            val res = AiSummarizerManager.summarizeGroupMessages(
+                                context = context,
+                                groupTitle = "Hội Anh Em IT",
+                                messages = sampleMessages,
+                                userNicknames = userNames
+                            )
+                            testResultText = res.summary
+                            isRunningSampleTest = false
+
+                            // Also trigger actual notification so user can see it on smartwatch!
+                            NotificationHelper.showGroupDigestNotification(
+                                context = context,
+                                notificationId = 88888,
+                                packageName = "com.whatsapp",
+                                groupTitle = "Hội Anh Em IT",
+                                summaryText = res.summary,
+                                messageCount = sampleMessages.size
+                            )
+                        }
+                    },
+                    enabled = !isRunningSampleTest && !isInferring,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    if (isRunningSampleTest || isInferring) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Đang suy luận AI...")
+                    } else {
+                        Text("Chạy thử tóm tắt & Gửi thông báo mẫu")
+                    }
+                }
+
+                if (!testResultText.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = MaterialTheme.colorScheme.background,
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Kết quả tóm tắt AI:",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = testResultText ?: "",
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 fun TestTabContent() {
     val context = LocalContext.current
@@ -1326,6 +1785,7 @@ fun HistoryTabContent() {
 
             val matchesStatus = when (statusFilterSelection) {
                 "FORWARD" -> msg.status == "FORWARD"
+                "AI_DIGEST" -> msg.status == "AI_DIGEST"
                 "FILTER" -> msg.status == "FILTER"
                 "BLOCK" -> msg.status == "BLOCK"
                 "NORMAL" -> msg.status == "NORMAL"
@@ -1337,6 +1797,7 @@ fun HistoryTabContent() {
     }
 
     val forwardCount = remember(capturedMessages) { capturedMessages.count { it.status == "FORWARD" } }
+    val aiDigestCount = remember(capturedMessages) { capturedMessages.count { it.status == "AI_DIGEST" } }
     val filterCount = remember(capturedMessages) { capturedMessages.count { it.status == "FILTER" } }
     val blockCount = remember(capturedMessages) { capturedMessages.count { it.status == "BLOCK" } }
     val normalCount = remember(capturedMessages) { capturedMessages.count { it.status == "NORMAL" } }
@@ -1397,6 +1858,12 @@ fun HistoryTabContent() {
                 onClick = { statusFilterSelection = "FORWARD" },
                 label = { Text("Forward ($forwardCount)", fontSize = 11.sp) },
                 colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFF2E7D32), selectedLabelColor = Color.White)
+            )
+            FilterChip(
+                selected = statusFilterSelection == "AI_DIGEST",
+                onClick = { statusFilterSelection = "AI_DIGEST" },
+                label = { Text("AI Digest ($aiDigestCount)", fontSize = 11.sp) },
+                colors = FilterChipDefaults.filterChipColors(selectedContainerColor = Color(0xFF6A1B9A), selectedLabelColor = Color.White)
             )
             FilterChip(
                 selected = statusFilterSelection == "FILTER",

@@ -26,6 +26,13 @@ object AppFilterPreferences {
     private const val KEY_BLOCKED_PACKAGES = "key_blocked_packages"
     private const val KEY_FILTER_KEYWORDS = "key_filter_keywords"
     private const val KEY_AUTO_DISMISS_ORIGINAL = "key_auto_dismiss_original"
+    private const val KEY_AI_SUMMARIZE_GROUPS_ENABLED = "key_ai_summarize_groups_enabled"
+    private const val KEY_USER_NICKNAMES = "key_user_nicknames"
+    private const val KEY_AI_DEBOUNCE_SECONDS = "key_ai_debounce_seconds"
+    private const val KEY_AI_SILENT_DIGEST = "key_ai_silent_digest"
+
+    const val DEFAULT_USER_NICKNAMES = "Phúc, phucdnh, anh Phúc"
+    const val DEFAULT_DEBOUNCE_SECONDS = 40
 
     // Default forward messaging apps (WhatsApp and SMS apps with OTP_ONLY)
     val DEFAULT_FORWARD = setOf(
@@ -89,6 +96,18 @@ object AppFilterPreferences {
     private val _autoDismissFlow = MutableStateFlow(true)
     val autoDismissFlow: StateFlow<Boolean> = _autoDismissFlow.asStateFlow()
 
+    private val _aiSummarizeGroupsFlow = MutableStateFlow(true)
+    val aiSummarizeGroupsFlow: StateFlow<Boolean> = _aiSummarizeGroupsFlow.asStateFlow()
+
+    private val _userNicknamesFlow = MutableStateFlow(DEFAULT_USER_NICKNAMES)
+    val userNicknamesFlow: StateFlow<String> = _userNicknamesFlow.asStateFlow()
+
+    private val _debounceSecondsFlow = MutableStateFlow(DEFAULT_DEBOUNCE_SECONDS)
+    val debounceSecondsFlow: StateFlow<Int> = _debounceSecondsFlow.asStateFlow()
+
+    private val _aiSilentDigestFlow = MutableStateFlow(true)
+    val aiSilentDigestFlow: StateFlow<Boolean> = _aiSilentDigestFlow.asStateFlow()
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     }
@@ -118,6 +137,10 @@ object AppFilterPreferences {
         val otpOnly = prefs.getStringSet(KEY_FORWARD_OTP_ONLY_PACKAGES, DEFAULT_FORWARD_OTP_ONLY) ?: DEFAULT_FORWARD_OTP_ONLY
         val kw = prefs.getStringSet(KEY_FILTER_KEYWORDS, DEFAULT_FILTER_KEYWORDS) ?: DEFAULT_FILTER_KEYWORDS
         val autoDismiss = prefs.getBoolean(KEY_AUTO_DISMISS_ORIGINAL, true)
+        val aiSummarize = prefs.getBoolean(KEY_AI_SUMMARIZE_GROUPS_ENABLED, true)
+        val userNicknames = prefs.getString(KEY_USER_NICKNAMES, DEFAULT_USER_NICKNAMES) ?: DEFAULT_USER_NICKNAMES
+        val debounceSec = prefs.getInt(KEY_AI_DEBOUNCE_SECONDS, DEFAULT_DEBOUNCE_SECONDS)
+        val aiSilent = prefs.getBoolean(KEY_AI_SILENT_DIGEST, true)
 
         _forwardFlow.value = fwd
         _forwardOtpOnlyFlow.value = otpOnly
@@ -125,6 +148,10 @@ object AppFilterPreferences {
         _blockedFlow.value = blk
         _keywordsFlow.value = kw
         _autoDismissFlow.value = autoDismiss
+        _aiSummarizeGroupsFlow.value = aiSummarize
+        _userNicknamesFlow.value = userNicknames
+        _debounceSecondsFlow.value = debounceSec
+        _aiSilentDigestFlow.value = aiSilent
     }
 
     fun getForwardType(context: Context, packageName: String): ForwardType {
@@ -330,5 +357,55 @@ object AppFilterPreferences {
         val prefs = getPrefs(context)
         prefs.edit().putBoolean(KEY_AUTO_DISMISS_ORIGINAL, enabled).apply()
         _autoDismissFlow.value = enabled
+    }
+
+    fun isAiSummarizeGroupsEnabled(context: Context): Boolean {
+        val prefs = getPrefs(context)
+        return prefs.getBoolean(KEY_AI_SUMMARIZE_GROUPS_ENABLED, true)
+    }
+
+    fun setAiSummarizeGroupsEnabled(context: Context, enabled: Boolean) {
+        val prefs = getPrefs(context)
+        prefs.edit().putBoolean(KEY_AI_SUMMARIZE_GROUPS_ENABLED, enabled).apply()
+        _aiSummarizeGroupsFlow.value = enabled
+    }
+
+    fun getUserNicknames(context: Context): List<String> {
+        val prefs = getPrefs(context)
+        val raw = prefs.getString(KEY_USER_NICKNAMES, DEFAULT_USER_NICKNAMES) ?: DEFAULT_USER_NICKNAMES
+        return raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+    }
+
+    fun getUserNicknamesRaw(context: Context): String {
+        val prefs = getPrefs(context)
+        return prefs.getString(KEY_USER_NICKNAMES, DEFAULT_USER_NICKNAMES) ?: DEFAULT_USER_NICKNAMES
+    }
+
+    fun setUserNicknames(context: Context, nicknames: String) {
+        val prefs = getPrefs(context)
+        prefs.edit().putString(KEY_USER_NICKNAMES, nicknames).apply()
+        _userNicknamesFlow.value = nicknames
+    }
+
+    fun getDebounceSeconds(context: Context): Int {
+        val prefs = getPrefs(context)
+        return prefs.getInt(KEY_AI_DEBOUNCE_SECONDS, DEFAULT_DEBOUNCE_SECONDS)
+    }
+
+    fun setDebounceSeconds(context: Context, seconds: Int) {
+        val prefs = getPrefs(context)
+        prefs.edit().putInt(KEY_AI_DEBOUNCE_SECONDS, seconds).apply()
+        _debounceSecondsFlow.value = seconds
+    }
+
+    fun isAiSilentDigest(context: Context): Boolean {
+        val prefs = getPrefs(context)
+        return prefs.getBoolean(KEY_AI_SILENT_DIGEST, true)
+    }
+
+    fun setAiSilentDigest(context: Context, silent: Boolean) {
+        val prefs = getPrefs(context)
+        prefs.edit().putBoolean(KEY_AI_SILENT_DIGEST, silent).apply()
+        _aiSilentDigestFlow.value = silent
     }
 }

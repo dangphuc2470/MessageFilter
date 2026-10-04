@@ -46,17 +46,24 @@ Each messaging app installed on the device can be independently assigned one of 
 - Inspects underlying `MessagingStyle` and `android.messages` parcel bundles to isolate strictly the single latest incoming message, attributing the active sender cleanly (`Sender: Message`).
 - Prevents smartwatches (Garmin, Wear OS, Amazfit) from rendering repeated backlogs of stale text, ensuring that when your wrist vibrates, you always see the actual newest message immediately at the top.
 
-### 4. Integrated Action Forwarding (Mark as Read & Direct Reply)
+### 4. On-Device AI Group Notification Digest (SmolLM2-135M via llama.cpp)
+- **Eliminates Wrist Notification Bombing:** When busy group chats erupt into dozens of rapid messages, the debouncer buffers incoming chatter over a customizable window (e.g., 20 to 60 seconds).
+- **Direct Mention Awareness:** Scans for user nicknames (e.g., `@Name`, `Name ơi`, `anh Name`). If a message directly tags or calls the user, the debouncer is immediately bypassed to deliver an urgent, high-priority alert without delay.
+- **100% Offline Local Summarization:** Runs a quantized `SmolLM2-135M-Instruct-Q4_K_M.gguf` model (~100MB) locally on device CPU/NEON using native `llama.cpp` (`org.codeshipping:llama-kotlin-android`).
+- **RAM Protection via Dynamic Auto-Unload:** Automatically unloads the model from RAM after 2 minutes of idle inactivity, keeping memory consumption minimal and preventing Android Low Memory Killer (LMK) eviction on devices with 4GB to 6GB RAM (such as Snapdragon 720G / Redmi Note 9S).
+- **Silent Digest Delivery:** Replaces dozens of disruptive wrist vibrations with a single consolidated summary notification (`[Tóm tắt AI] Group Name (X messages)`).
+
+### 5. Integrated Action Forwarding (Mark as Read & Direct Reply)
 - Preserves native messaging capabilities by extracting standard, wearable, and invisible actions from original notifications.
 - Users can reply directly from the forwarded notification banner using Android `RemoteInput`, or dismiss the alert while triggering "Mark as Read" in the origin application.
 
-### 5. Built-in Notification History & Search
+### 6. Built-in Notification History & Search
 - Logs processed notifications into a local database for review.
-- Filter history entries by status (All, Forward, Filter, Block, Normal) or search by sender and message content.
+- Filter history entries by status (All, Forward, AI Digest, Filter, Block, Normal) or search by sender and message content.
 - Individual messages or the entire history can be purged at any time.
 
-### 6. Interactive In-App Simulator
-- Includes a built-in message simulator to test custom blacklist keywords and OTP extraction patterns against simulated alerts before applying them to real conversations.
+### 7. Interactive In-App Simulator & AI Testbench
+- Includes a built-in message simulator to test custom blacklist keywords, OTP extraction patterns, and live on-device AI group chat summarization against simulated alerts before applying them to real conversations.
 
 ---
 
@@ -82,6 +89,8 @@ For full legal and compliance details, refer to [PRIVACY_POLICY.md](PRIVACY_POLI
   - `MessageNotificationListenerService`: Subclass of Android `NotificationListenerService` responsible for listening, filtering, and delegating incoming notifications.
   - `NotificationHelper`: Handles notification channel configuration, conversation grouping, avatar rendering, and building `NotificationCompat` builders.
   - `OtpExtractor`: RegEx-based token recognition engine with year-exclusion heuristics (ignoring numbers starting with 202x or 199x).
+  - `AiSummarizerManager`: On-demand lifecycle manager for `SmolLM2-135M-Instruct-Q4_K_M.gguf` using `llama-kotlin-android` (native `llama.cpp` C++17 arm64/x86_64).
+  - `GroupNotificationDebouncer`: Sliding-window burst message collector with user mention detection and automatic debouncing.
   - Broadcast Receivers (`CopyOtpReceiver`, `MarkAsReadReceiver`, `ReplyReceiver`): Intercept action button clicks and dispatch corresponding system or clipboard tasks.
 - **Local Storage:** SQLite (`AppDatabaseHelper`) with parameterized queries and index-optimized schema.
 - **System Compatibility:** Android 7.0 (API Level 24) to Android 16 (API Level 36).
@@ -95,6 +104,7 @@ For full legal and compliance details, refer to [PRIVACY_POLICY.md](PRIVACY_POLI
 | `BIND_NOTIFICATION_LISTENER_SERVICE` | Required by the operating system for the service to intercept incoming notifications. |
 | `POST_NOTIFICATIONS` | Required on Android 13 (API 33) and above to present forwarded notifications with action buttons. |
 | `QUERY_ALL_PACKAGES` | Used locally to enumerate installed applications so users can configure rules on their installed messaging clients. |
+| `INTERNET` | Optional; utilized strictly upon user initiation to download offline GGUF model weights (~100MB) from Hugging Face CDN. Zero notification or message data is ever transmitted. |
 
 ---
 
