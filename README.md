@@ -1,63 +1,99 @@
-# Message Filter & Forwarder (Android)
+# Message Filter & Forwarder
 
-A lightweight, privacy-focused Android utility application built with **Jetpack Compose** and **Material 3** that organizes, filters, and forwards notifications from popular messaging apps with automatic OTP extraction and quick action support.
-
----
-
-## Key Features
-
-- **Four Flexible Processing Modes Per App:**
-  - **Forward (Green):** Intercepts original notifications, parses clean message text, groups conversations, and provides interactive action buttons ("Copy OTP", "Mark as Read", "Reply").
-  - **Filter (Blue):** Automatically suppresses spam, promotional, or unwanted notifications matching customizable keywords (e.g., voucher, sale, discount), while keeping normal chat messages intact.
-  - **Block (Red):** Silently blocks and dismisses all notifications from selected apps.
-  - **Normal / None (White):** Leaves notifications untouched.
-
-- **Intelligent OTP & Verification Code Extraction:**
-  - Automatically identifies verification codes and OTPs from SMS and chat messages (supporting Google, banks, WhatsApp, Facebook, TikTok, and standard formats like `G-XXXXXX` or standalone 4–8 digit codes).
-  - One-tap "Copy OTP" button directly in the notification shade.
-
-- **Direct Reply & Mark as Read Integration:**
-  - Seamlessly forwards Android Wearable and RemoteInput reply intents back to the origin app (WhatsApp, Messenger, SMS, etc.).
-
-- **Privacy-First & Completely Offline:**
-  - **Zero cloud communication, zero analytics, zero trackers.**
-  - All processing and storage occur 100% on-device inside a local SQLite database (`message_filter.db`).
-
-- **Built-in Message Simulator:**
-  - Test custom filter keywords and OTP patterns directly within the app before applying them to real notifications.
+An open-source, privacy-first Android application designed to eliminate notification overload, suppress unwanted spam, and streamline verification code handling across all messaging platforms. Built with Kotlin, Jetpack Compose, and Material Design 3.
 
 ---
 
-## Tech Stack & Architecture
+## Why Message Filter & Forwarder Exists
+
+Modern Android users rely on multiple communication platforms daily, including WhatsApp, Google Messages (SMS), Zalo, Telegram, Facebook Messenger, and Viber. However, this multi-app ecosystem introduces several persistent pain points:
+
+1. **Notification Clutter and Marketing Spam:**  
+   Service providers, brand channels, and groups frequently push promotional alerts, discount codes, vouchers, and automated bot messages that bury critical personal and work messages.
+
+2. **The Friction of One-Time Passwords (OTPs):**  
+   Receiving authentication codes (from Google, banks, or two-factor authentication services) requires either opening the SMS app, memorizing numbers, or attempting to highlight tiny numbers inside a dense notification body. Many apps do not provide a dedicated "Copy Code" action in their notification tray.
+
+3. **Wearable and Smartwatch Redundancy:**  
+   Smartwatches and fitness bands (Garmin, Wear OS, Amazfit) mirror every notification received on the phone. Background system tasks, backup reminders ("WhatsApp Web is active", "Checking for new messages"), and duplicate alerts trigger continuous unnecessary vibrations on wrists.
+
+4. **Privacy Concerns with Cloud-Based Filters:**  
+   Most third-party notification organizers or SMS managers route messages through external cloud servers to parse text or apply machine learning models, posing severe security risks to sensitive communications and financial OTPs.
+
+**Message Filter & Forwarder was created to solve these challenges with an absolute guarantee of local, on-device processing and granular per-application control.**
+
+---
+
+## Core Features
+
+### 1. Four Operating Modes per Application
+Each messaging app installed on the device can be independently assigned one of four distinct processing modes:
+- **Forward (Green):** Intercepts notifications, formats clean message headers, groups conversations, and injects actionable buttons (Copy OTP, Mark as Read, Direct Reply).
+- **Filter (Blue):** Continuously monitors incoming notifications against a customizable blacklist of spam/promotional keywords (e.g., voucher, sale, promotion, discount). Clean conversations pass through untouched, while matching spam notifications are silently dismissed.
+- **Block (Red):** Silently intercepts and dismisses all notifications from noisy or non-essential applications.
+- **Normal (White):** Leaves application notifications completely unmanaged, allowing standard system delivery.
+
+### 2. Intelligent OTP & Verification Code Extraction
+- Automatically parses incoming message text for verification codes, login tokens, and one-time passwords across multiple languages (English and Vietnamese).
+- Supports prefixed codes (such as Google's `G-XXXXXX`, Facebook's `FB-XXXXX`, bank transaction codes), explicit assignment patterns (`Code is 123456`, `Mã xác minh là 123456`), and standalone numeric sequences.
+- Attaches an interactive **"Copy [CODE]"** button directly into the notification banner, allowing one-tap clipboard copying without opening the app or navigating away from the current screen.
+
+### 3. Integrated Action Forwarding (Mark as Read & Direct Reply)
+- Preserves native messaging capabilities by extracting standard, wearable, and invisible actions from original notifications.
+- Users can reply directly from the forwarded notification banner using Android `RemoteInput`, or dismiss the alert while triggering "Mark as Read" in the origin application.
+
+### 4. Built-in Notification History & Search
+- Logs processed notifications into a local database for review.
+- Filter history entries by status (All, Forward, Filter, Block, Normal) or search by sender and message content.
+- Individual messages or the entire history can be purged at any time.
+
+### 5. Interactive In-App Simulator
+- Includes a built-in message simulator to test custom blacklist keywords and OTP extraction patterns against simulated alerts before applying them to real conversations.
+
+---
+
+## Privacy Architecture: 100% On-Device
+
+Message Filter & Forwarder is engineered with a strict zero-data-collection philosophy:
+
+- **No Remote Servers:** The application has no networking layer, no backend API, and no cloud synchronization.
+- **No Third-Party SDKs:** No analytics frameworks (e.g., Google Analytics, Firebase), crash reporters with network access, or advertising libraries are included.
+- **Local Persistence Only:** All configuration settings, keyword lists, and notification logs are stored inside private app storage using Android `SharedPreferences` and an offline SQLite database (`message_filter.db`).
+- **Full Transparency:** A prominent disclosure is presented prior to requesting the Android Notification Listener permission, clearly detailing that notifications are processed locally in memory.
+
+For full legal and compliance details, refer to [PRIVACY_POLICY.md](PRIVACY_POLICY.md).
+
+---
+
+## Technical Architecture
 
 - **Language:** Kotlin 2.2+
-- **UI Framework:** Jetpack Compose with Material Design 3
-- **Architecture:** Unidirectional Data Flow with Kotlin Coroutines & `StateFlow`
-- **Core Services:**
-  - `NotificationListenerService` (`MessageNotificationListenerService`)
-  - `BroadcastReceiver` (`CopyOtpReceiver`, `MarkAsReadReceiver`, `ReplyReceiver`)
-- **Persistence:** Local SQLite database via `SQLiteOpenHelper` & encrypted/sandbox `SharedPreferences`
-- **Minimum SDK:** Android 7.0 (API 24)
-- **Target SDK:** Android 16 (API 36)
+- **User Interface:** Jetpack Compose with Material Design 3 and Dynamic Color
+- **State Management:** Unidirectional Data Flow (UDF) powered by Kotlin Coroutines and `StateFlow`
+- **Background Processing:**
+  - `MessageNotificationListenerService`: Subclass of Android `NotificationListenerService` responsible for listening, filtering, and delegating incoming notifications.
+  - `NotificationHelper`: Handles notification channel configuration, conversation grouping, avatar rendering, and building `NotificationCompat` builders.
+  - `OtpExtractor`: RegEx-based token recognition engine with year-exclusion heuristics (ignoring numbers starting with 202x or 199x).
+  - Broadcast Receivers (`CopyOtpReceiver`, `MarkAsReadReceiver`, `ReplyReceiver`): Intercept action button clicks and dispatch corresponding system or clipboard tasks.
+- **Local Storage:** SQLite (`AppDatabaseHelper`) with parameterized queries and index-optimized schema.
+- **System Compatibility:** Android 7.0 (API Level 24) to Android 16 (API Level 36).
 
 ---
 
-## Permissions Overview
+## Permissions
 
-| Permission | Purpose |
+| Permission | Technical Requirement |
 | :--- | :--- |
-| `BIND_NOTIFICATION_LISTENER_SERVICE` | Required to read and organize incoming notifications based on user rules. |
-| `POST_NOTIFICATIONS` | Required on Android 13+ to post forwarded messages and OTP alerts. |
-| `QUERY_ALL_PACKAGES` | Allows the user to select which installed messaging apps to manage. |
-
-For detailed information on how data is handled, see the [Privacy Policy](PRIVACY_POLICY.md).
+| `BIND_NOTIFICATION_LISTENER_SERVICE` | Required by the operating system for the service to intercept incoming notifications. |
+| `POST_NOTIFICATIONS` | Required on Android 13 (API 33) and above to present forwarded notifications with action buttons. |
+| `QUERY_ALL_PACKAGES` | Used locally to enumerate installed applications so users can configure rules on their installed messaging clients. |
 
 ---
 
-## Building from Source
+## Building and Installation
 
 ### Prerequisites
-- Android Studio Ladybug (or newer)
+- Android Studio Ladybug (2024.2.1) or newer
 - JDK 17 or JDK 21
 - Android SDK Platform 36
 
@@ -67,15 +103,20 @@ For detailed information on how data is handled, see the [Privacy Policy](PRIVAC
 git clone https://github.com/dangphuc2470/MessageFilter.git
 cd MessageFilter
 
-# Build Debug APK
+# Compile and package debug APK
 ./gradlew assembleDebug
 
-# Output APK location:
+# Output APK path:
 # app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Installing via ADB
+```bash
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
