@@ -32,7 +32,7 @@ object AppFilterPreferences {
     private const val KEY_AI_SILENT_DIGEST = "key_ai_silent_digest"
 
     const val DEFAULT_USER_NICKNAMES = "Phúc, phucdnh, anh Phúc"
-    const val DEFAULT_DEBOUNCE_SECONDS = 40
+    const val DEFAULT_DEBOUNCE_SECONDS = 30
 
     // Default forward messaging apps (WhatsApp and SMS apps with OTP_ONLY)
     val DEFAULT_FORWARD = setOf(
@@ -141,7 +141,7 @@ object AppFilterPreferences {
         val aiSummarize = prefs.getBoolean(KEY_AI_SUMMARIZE_GROUPS_ENABLED, true)
         val userNicknames = prefs.getString(KEY_USER_NICKNAMES, DEFAULT_USER_NICKNAMES) ?: DEFAULT_USER_NICKNAMES
         val debounceSec = prefs.getInt(KEY_AI_DEBOUNCE_SECONDS, DEFAULT_DEBOUNCE_SECONDS)
-        val aiSilent = prefs.getBoolean(KEY_AI_SILENT_DIGEST, true)
+        val aiSilent = prefs.getBoolean(KEY_AI_SILENT_DIGEST, false)
 
         _forwardFlow.value = fwd
         _forwardOtpOnlyFlow.value = otpOnly
@@ -401,7 +401,7 @@ object AppFilterPreferences {
 
     fun isAiSilentDigest(context: Context): Boolean {
         val prefs = getPrefs(context)
-        return prefs.getBoolean(KEY_AI_SILENT_DIGEST, true)
+        return prefs.getBoolean(KEY_AI_SILENT_DIGEST, false)
     }
 
     fun setAiSilentDigest(context: Context, silent: Boolean) {

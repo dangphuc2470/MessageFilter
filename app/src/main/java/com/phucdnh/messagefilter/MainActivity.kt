@@ -1036,7 +1036,7 @@ fun AiDigestTabContent() {
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "SmolLM2-135M-Instruct (Quantized Q4_K_M ~100MB). Xử lý hoàn toàn ngoại tuyến qua llama.cpp, không gửi dữ liệu ra mạng internet và tự động giải phóng RAM sau 2 phút.",
+                    text = "Qwen2.5-0.5B-Instruct (Quantized Q4_K_M ~468MB). Xử lý hoàn toàn ngoại tuyến qua llama.cpp, hỗ trợ tiếng Việt mượt mà, không gửi dữ liệu ra mạng internet và tự động giải phóng RAM sau 2 phút.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -1266,7 +1266,7 @@ fun AiDigestTabContent() {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf(20, 40, 60).forEach { sec ->
+                    listOf(15, 30, 45, 60).forEach { sec ->
                         FilterChip(
                             selected = debounceSeconds == sec,
                             onClick = { AppFilterPreferences.setDebounceSeconds(context, sec) },
@@ -1274,6 +1274,12 @@ fun AiDigestTabContent() {
                         )
                     }
                 }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Tối đa 3 phút cho 1 đợt nếu nhóm nhắn liên tục không dừng.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider()
@@ -1286,20 +1292,20 @@ fun AiDigestTabContent() {
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Thông báo tóm tắt im lặng",
+                            text = "Rung & Đẩy tóm tắt lên Smartwatch",
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "Thông báo tóm tắt chỉ hiển thị trên màn hình đồng hồ mà không làm rung tay.",
+                            text = "Thông báo tóm tắt AI sẽ rung đồng hồ smartwatch. Toàn bộ tin nhắn lẻ không tóm tắt vẫn nằm im lặng dưới đáy thanh thông báo điện thoại.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
                     Switch(
-                        checked = silentDigest,
-                        onCheckedChange = { AppFilterPreferences.setAiSilentDigest(context, it) }
+                        checked = !silentDigest,
+                        onCheckedChange = { AppFilterPreferences.setAiSilentDigest(context, !it) }
                     )
                 }
             }

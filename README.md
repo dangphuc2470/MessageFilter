@@ -46,10 +46,10 @@ Each messaging app installed on the device can be independently assigned one of 
 - Inspects underlying `MessagingStyle` and `android.messages` parcel bundles to isolate strictly the single latest incoming message, attributing the active sender cleanly (`Sender: Message`).
 - Prevents smartwatches (Garmin, Wear OS, Amazfit) from rendering repeated backlogs of stale text, ensuring that when your wrist vibrates, you always see the actual newest message immediately at the top.
 
-### 4. On-Device AI Group Notification Digest (SmolLM2-135M via llama.cpp)
+### 4. On-Device AI Group Notification Digest (Qwen2.5-0.5B via llama.cpp)
 - **Eliminates Wrist Notification Bombing:** When busy group chats erupt into dozens of rapid messages, the debouncer buffers incoming chatter over a customizable window (e.g., 20 to 60 seconds).
 - **Direct Mention Awareness:** Scans for user nicknames (e.g., `@Name`, `Name ơi`, `anh Name`). If a message directly tags or calls the user, the debouncer is immediately bypassed to deliver an urgent, high-priority alert without delay.
-- **100% Offline Local Summarization:** Runs a quantized `SmolLM2-135M-Instruct-Q4_K_M.gguf` model (~100MB) locally on device CPU/NEON using native `llama.cpp` (`org.codeshipping:llama-kotlin-android`).
+- **100% Offline Local Summarization:** Runs a quantized `qwen2.5-0.5b-instruct-q4_k_m.gguf` model (~468MB) locally on device CPU/NEON using native `llama.cpp` (`org.codeshipping:llama-kotlin-android`), delivering fluent multilingual and Vietnamese conversational synthesis.
 - **RAM Protection via Dynamic Auto-Unload:** Automatically unloads the model from RAM after 2 minutes of idle inactivity, keeping memory consumption minimal and preventing Android Low Memory Killer (LMK) eviction on devices with 4GB to 6GB RAM (such as Snapdragon 720G / Redmi Note 9S).
 - **Silent Digest Delivery:** Replaces dozens of disruptive wrist vibrations with a single consolidated summary notification (`[Tóm tắt AI] Group Name (X messages)`).
 
@@ -89,7 +89,7 @@ For full legal and compliance details, refer to [PRIVACY_POLICY.md](PRIVACY_POLI
   - `MessageNotificationListenerService`: Subclass of Android `NotificationListenerService` responsible for listening, filtering, and delegating incoming notifications.
   - `NotificationHelper`: Handles notification channel configuration, conversation grouping, avatar rendering, and building `NotificationCompat` builders.
   - `OtpExtractor`: RegEx-based token recognition engine with year-exclusion heuristics (ignoring numbers starting with 202x or 199x).
-  - `AiSummarizerManager`: On-demand lifecycle manager for `SmolLM2-135M-Instruct-Q4_K_M.gguf` using `llama-kotlin-android` (native `llama.cpp` C++17 arm64/x86_64).
+  - `AiSummarizerManager`: On-demand lifecycle manager for `qwen2.5-0.5b-instruct-q4_k_m.gguf` using `llama-kotlin-android` (native `llama.cpp` C++17 arm64/x86_64).
   - `GroupNotificationDebouncer`: Sliding-window burst message collector with user mention detection and automatic debouncing.
   - Broadcast Receivers (`CopyOtpReceiver`, `MarkAsReadReceiver`, `ReplyReceiver`): Intercept action button clicks and dispatch corresponding system or clipboard tasks.
 - **Local Storage:** SQLite (`AppDatabaseHelper`) with parameterized queries and index-optimized schema.

@@ -131,9 +131,10 @@ object NotificationHelper {
             }
             notificationManager.createNotificationChannel(silentChannel)
 
-            val digestChannel = NotificationChannel(AI_DIGEST_CHANNEL_ID, AI_DIGEST_CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT).apply {
+            val digestChannel = NotificationChannel(AI_DIGEST_CHANNEL_ID, AI_DIGEST_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH).apply {
                 description = AI_DIGEST_CHANNEL_DESC
                 enableVibration(true)
+                vibrationPattern = longArrayOf(0, 300, 200, 300)
                 setShowBadge(true)
             }
             notificationManager.createNotificationChannel(digestChannel)
@@ -190,6 +191,7 @@ object NotificationHelper {
             .setContentTitle(title)
             .setContentText(contentText)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setLocalOnly(true) // Stays strictly on phone under the shade; does NOT buzz watch
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setOngoing(false)
             .setAutoCancel(true)
@@ -514,7 +516,9 @@ object NotificationHelper {
             .setContentText(summaryText)
             .setStyle(bigTextStyle)
             .setSubText(appName)
-            .setPriority(if (isSilent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (isSilent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
+            .setVibrate(if (isSilent) null else longArrayOf(0, 300, 200, 300))
+            .setLocalOnly(isSilent) // When silent mode is off (default), bridges and vibrates on smartwatch!
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setOnlyAlertOnce(true)
             .setAutoCancel(true)

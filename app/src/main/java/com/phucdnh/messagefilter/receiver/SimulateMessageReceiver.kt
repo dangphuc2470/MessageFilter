@@ -30,13 +30,33 @@ class SimulateMessageReceiver : BroadcastReceiver() {
 
         when (action) {
             ACTION_SIMULATE_BURST -> {
-                val burstMessages = listOf(
-                    "Hoàng" to "Mọi người đã nộp báo cáo tuần chưa?",
-                    "Lan" to "T vừa nộp qua email lúc nãy rồi",
-                    "Nam" to "Chiều nay 2h họp chốt tiến độ sprint nhé cả nhóm",
-                    "Tuấn" to "Ok t có mặt đúng giờ nha",
-                    "Mai" to "Nhớ chuẩn bị sẵn slide demo sản phẩm"
-                )
+                val immediate = intent.getBooleanExtra("immediate", true)
+                val rawCustomMessages = intent.getStringExtra("messages_base64")?.let { b64 ->
+                    try {
+                        String(android.util.Base64.decode(b64, android.util.Base64.DEFAULT), Charsets.UTF_8)
+                    } catch (e: Exception) {
+                        null
+                    }
+                } ?: intent.getStringExtra("messages")
+
+                val burstMessages = if (!rawCustomMessages.isNullOrBlank()) {
+                    rawCustomMessages.split("\n", "||").mapNotNull { line ->
+                        val parts = line.split(":", limit = 2)
+                        if (parts.size == 2) {
+                            parts[0].trim() to parts[1].trim()
+                        } else if (line.isNotBlank()) {
+                            "Thành viên" to line.trim()
+                        } else null
+                    }
+                } else {
+                    listOf(
+                        "Hoàng" to "Mọi người đã nộp báo cáo tuần chưa?",
+                        "Lan" to "T vừa nộp qua email lúc nãy rồi",
+                        "Nam" to "Chiều nay 2h họp chốt tiến độ sprint nhé cả nhóm",
+                        "Tuấn" to "Ok t có mặt đúng giờ nha",
+                        "Mai" to "Nhớ chuẩn bị sẵn slide demo sản phẩm"
+                    )
+                }
 
                 CoroutineScope(Dispatchers.Default).launch {
                     burstMessages.forEachIndexed { index, (sender, text) ->
@@ -49,7 +69,17 @@ class SimulateMessageReceiver : BroadcastReceiver() {
                             timestamp = System.currentTimeMillis()
                         )
                         Log.d(TAG, "[$index] Sent '$sender: $text' -> decision: $decision")
-                        delay(250)
+                        if (!immediate) delay(200)
+                    }
+
+                    if (immediate) {
+                        Log.d(TAG, "Immediate mode requested: flushing group digest now for '$groupTitle'")
+                        delay(300)
+                        GroupNotificationDebouncer.flushSessionImmediately(
+                            context = context.applicationContext,
+                            packageName = packageName,
+                            groupTitle = groupTitle
+                        )
                     }
                 }
             }

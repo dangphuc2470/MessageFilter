@@ -35,9 +35,11 @@ data class GroupSummaryResult(
 
 object AiSummarizerManager {
     private const val TAG = "AiSummarizer"
-    const val MODEL_FILENAME = "SmolLM2-135M-Instruct-Q4_K_M.gguf"
-    const val MODEL_DOWNLOAD_URL = "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf"
-    const val ESTIMATED_SIZE_BYTES = 105454432L // ~100.5 MB
+    const val MODEL_FILENAME = "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    const val MODEL_DOWNLOAD_URL = "https://github.com/dangphuc2470/MessageFilter/releases/download/v1.0.0/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    const val MODEL_DOWNLOAD_URL_FALLBACK = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf"
+
+    const val ESTIMATED_SIZE_BYTES = 491400032L // ~468.6 MB
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private val mutex = Mutex()
@@ -84,39 +86,50 @@ object AiSummarizerManager {
 
             try {
                 _downloadState.value = ModelDownloadState.Downloading(0f, 0L, ESTIMATED_SIZE_BYTES)
-                var currentUrl = MODEL_DOWNLOAD_URL
                 var connection: HttpURLConnection? = null
-                var redirectCount = 0
-                val maxRedirects = 6
+                var lastException: Exception? = null
 
-                while (redirectCount < maxRedirects) {
-                    val url = URL(currentUrl)
-                    connection = (url.openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 20000
-                        readTimeout = 30000
-                        instanceFollowRedirects = false
-                        setRequestProperty("User-Agent", "MessageFilter-Android")
-                    }
-                    val code = connection.responseCode
-                    if (code == HttpURLConnection.HTTP_MOVED_TEMP ||
-                        code == HttpURLConnection.HTTP_MOVED_PERM ||
-                        code == 307 || code == 308
-                    ) {
-                        val newUrl = connection.getHeaderField("Location")
-                        connection.disconnect()
-                        if (newUrl.isNullOrBlank()) {
-                            throw IllegalStateException("Received redirect without Location header")
+                for (sourceUrl in listOf(MODEL_DOWNLOAD_URL, MODEL_DOWNLOAD_URL_FALLBACK)) {
+                    var currentUrl = sourceUrl
+                    var redirectCount = 0
+                    val maxRedirects = 6
+                    try {
+                        while (redirectCount < maxRedirects) {
+                            val url = URL(currentUrl)
+                            val conn = (url.openConnection() as HttpURLConnection).apply {
+                                connectTimeout = 30000
+                                readTimeout = 30000
+                                instanceFollowRedirects = false
+                                setRequestProperty("User-Agent", "MessageFilter-Android")
+                            }
+                            val code = conn.responseCode
+                            if (code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                                code == HttpURLConnection.HTTP_MOVED_PERM ||
+                                code == 307 || code == 308
+                            ) {
+                                val newUrl = conn.getHeaderField("Location")
+                                conn.disconnect()
+                                if (newUrl.isNullOrBlank()) {
+                                    throw IllegalStateException("Received redirect without Location header")
+                                }
+                                currentUrl = newUrl
+                                redirectCount++
+                            } else if (code == HttpURLConnection.HTTP_OK) {
+                                connection = conn
+                                break
+                            } else {
+                                conn.disconnect()
+                                throw IllegalStateException("HTTP error $code: ${conn.responseMessage}")
+                            }
                         }
-                        currentUrl = newUrl
-                        redirectCount++
-                    } else if (code == HttpURLConnection.HTTP_OK) {
-                        break
-                    } else {
-                        throw IllegalStateException("HTTP error $code: ${connection.responseMessage}")
+                        if (connection != null) break
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed connecting to $sourceUrl: ${e.message}, trying fallback if available")
+                        lastException = e
                     }
                 }
 
-                val conn = connection ?: throw IllegalStateException("Could not establish connection")
+                val conn = connection ?: throw (lastException ?: IllegalStateException("Could not establish connection"))
                 val totalBytes = if (conn.contentLengthLong > 0) conn.contentLengthLong else ESTIMATED_SIZE_BYTES
 
                 if (tempFile.exists()) {
@@ -219,9 +232,9 @@ object AiSummarizerManager {
                 batchSize = 256
                 threads = 4
                 threadsBatch = 4
-                temperature = 0.25f
+                temperature = 0.2f
                 topP = 0.85f
-                maxTokens = 128
+                maxTokens = 64
                 useMmap = true
                 useMlock = false
                 gpuLayers = 0
@@ -297,23 +310,51 @@ object AiSummarizerManager {
         messages: List<Pair<String, String>>,
         userNicknames: List<String>
     ): String {
-        val nameList = if (userNicknames.isNotEmpty()) userNicknames.joinToString(", ") else "User"
-        val formattedMessages = messages.takeLast(10).joinToString("\n") { (sender, text) ->
-            "$sender: $text"
+        // Take last 8 messages, skip extremely long individual messages to save context
+        val formattedMessages = messages.takeLast(8).joinToString("\n") { (sender, text) ->
+            val truncatedText = if (text.length > 120) text.take(120) + "..." else text
+            "$sender: $truncatedText"
         }
 
         return buildString {
             append("<|im_start|>system\n")
-            append("You are an on-device notification summarizer for an individual named $nameList.\n")
-            append("Analyze the following conversation from group \"$groupTitle\".\n")
-            append("1. Check if any message is urgently directed to $nameList.\n")
-            append("2. Summarize what the discussion is about in ONE concise sentence in Vietnamese.\n")
-            append("Respond strictly in this format:\n")
-            append("URGENT: YES or NO\n")
-            append("SUMMARY: <1 sentence summary in Vietnamese>\n")
+            append(
+                "You are a Vietnamese group chat summarizer for smartwatch notifications. " +
+                "Your ONLY task: read the conversation and output EXACTLY ONE concise Vietnamese sentence summarizing the key topic/action. " +
+                "STRICT RULES:\n" +
+                "- Output ONLY the summary sentence, nothing else.\n" +
+                "- Do NOT copy or quote any original message lines.\n" +
+                "- Do NOT list sender names.\n" +
+                "- Do NOT continue the conversation.\n" +
+                "- End with a period.\n"
+            )
             append("<|im_end|>\n")
+
+            // Few-shot example 1: casual lunch planning
             append("<|im_start|>user\n")
-            append("Conversation:\n")
+            append("Hội thoại nhóm \"Bạn Bè\":\n")
+            append("An: Trưa nay ăn gì cả nhà?\n")
+            append("Bình: Ra quán cơm tấm sườn nướng đầu phố đi\n")
+            append("Chi: 12h có mặt nha\n")
+            append("<|im_end|>\n")
+            append("<|im_start|>assistant\n")
+            append("Cả nhóm hẹn nhau 12h ăn cơm tấm sườn nướng.\n")
+            append("<|im_end|>\n")
+
+            // Few-shot example 2: work deadline scenario
+            append("<|im_start|>user\n")
+            append("Hội thoại nhóm \"Dự Án\":\n")
+            append("Minh: Deadline nộp báo cáo là tối nay 8h nha mọi người\n")
+            append("Hà: Ok t đang làm rồi\n")
+            append("Tuấn: Nhớ gửi kèm file Excel\n")
+            append("<|im_end|>\n")
+            append("<|im_start|>assistant\n")
+            append("Nhóm nhắc deadline nộp báo cáo tối nay 8h, kèm file Excel.\n")
+            append("<|im_end|>\n")
+
+            // Actual conversation to summarize
+            append("<|im_start|>user\n")
+            append("Hội thoại nhóm \"$groupTitle\":\n")
             append(formattedMessages)
             append("\n<|im_end|>\n")
             append("<|im_start|>assistant\n")
@@ -321,32 +362,42 @@ object AiSummarizerManager {
     }
 
     private fun parseSummaryOutput(raw: String, messages: List<Pair<String, String>>): GroupSummaryResult {
-        var isUrgent = false
-        var summary = ""
+        // Only filter out lines that literally look like "Sender: message" chat echoes.
+        // Do NOT filter by original keywords — a good summary naturally contains input words.
+        val senderColonRegex = Regex("""^[\w\s\u00C0-\u1EF4\u00E0-\u1EF5]{1,20}:\s""")
 
-        val lines = raw.lines()
-        for (line in lines) {
-            val trimmed = line.trim()
-            if (trimmed.startsWith("URGENT:", ignoreCase = true)) {
-                val value = trimmed.substringAfter(":").trim().uppercase()
-                if (value.startsWith("YES")) {
-                    isUrgent = true
-                }
-            } else if (trimmed.startsWith("SUMMARY:", ignoreCase = true)) {
-                summary = trimmed.substringAfter(":").trim()
+        val candidateLines = raw
+            .replace("<|im_end|>", "")
+            .replace("<|im_start|>", "")
+            .lines()
+            .map { it.trim() }
+            .filter { line ->
+                if (line.isBlank()) return@filter false
+                // Reject lines that look like echoed "Sender: message" chat lines
+                if (senderColonRegex.containsMatchIn(line)) return@filter false
+                true
             }
+
+        var summary = candidateLines.firstOrNull()?.trim() ?: ""
+
+        // Strip surrounding quotes
+        summary = summary.trim('"', '“', '”', '\'', ' ')
+
+        // Truncate at first sentence boundary
+        val sentenceEnd = summary.indexOfFirst { it == '.' || it == '!' || it == '?' }
+        if (sentenceEnd in 10..200) {
+            summary = summary.substring(0, sentenceEnd + 1).trim()
+        } else if (summary.length > 130) {
+            summary = summary.take(130).trimEnd() + "..."
         }
 
-        if (summary.isBlank()) {
-            summary = lines.firstOrNull { it.isNotBlank() && !it.contains("URGENT:", ignoreCase = true) }?.trim() ?: ""
-        }
-
-        if (summary.isBlank()) {
+        if (summary.isBlank() || summary.length < 8) {
+            Log.w(TAG, "Summary rejected or too short, using fallback. Raw: $raw")
             summary = fallbackSummary(messages).summary
         }
 
         return GroupSummaryResult(
-            isUrgent = isUrgent,
+            isUrgent = false,
             summary = summary,
             rawResponse = raw
         )

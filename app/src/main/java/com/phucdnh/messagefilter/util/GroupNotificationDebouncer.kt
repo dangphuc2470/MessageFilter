@@ -117,13 +117,25 @@ object GroupNotificationDebouncer {
 
             val debounceSec = AppFilterPreferences.getDebounceSeconds(context).coerceIn(10, 120)
             val maxMessagesThreshold = 8
+            val sessionDurationMs = timestamp - session.firstMessageTime
+            val maxSessionDurationMs = 180_000L // Hard ceiling of 3 minutes per burst
 
-            // If session already gathered enough messages, trigger immediately
-            val delayMs = if (session.messages.size >= maxMessagesThreshold) {
+            // If session has already run for 3 minutes, force dispatch immediately
+            if (sessionDurationMs >= maxSessionDurationMs) {
+                Log.d(TAG, "Hard ceiling of 3 minutes reached for '$groupTitle'. Dispatching digest now.")
+                session.debounceJob = scope.launch {
+                    dispatchGroupDigest(context, sessionKey)
+                }
+                return DebounceDecision.BUFFERED_WAITING
+            }
+
+            val remainingMaxTimeMs = (maxSessionDurationMs - sessionDurationMs).coerceAtLeast(1000L)
+            val standardDelayMs = if (session.messages.size >= maxMessagesThreshold) {
                 1500L
             } else {
                 debounceSec * 1000L
             }
+            val delayMs = minOf(standardDelayMs, remainingMaxTimeMs)
 
             session.debounceJob = scope.launch {
                 delay(delayMs)
@@ -132,6 +144,11 @@ object GroupNotificationDebouncer {
         }
 
         return DebounceDecision.BUFFERED_WAITING
+    }
+
+    fun flushSessionImmediately(context: Context, packageName: String, groupTitle: String) {
+        val sessionKey = "$packageName:$groupTitle"
+        dispatchGroupDigest(context, sessionKey)
     }
 
     private fun dispatchGroupDigest(context: Context, sessionKey: String) {
