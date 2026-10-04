@@ -58,6 +58,9 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.res.painterResource
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -149,6 +152,8 @@ fun MainScreen() {
     }
 
     var selectedTabIndex by remember { mutableIntStateOf(0) }
+    var showNotificationDisclosureDialog by remember { mutableStateOf(false) }
+    var showPrivacyPolicyDialog by remember { mutableStateOf(false) }
 
     val requestPostNotificationLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -183,6 +188,14 @@ fun MainScreen() {
                         fontWeight = FontWeight.Bold
                     )
                 },
+                actions = {
+                    IconButton(onClick = { showPrivacyPolicyDialog = true }) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_info),
+                            contentDescription = "Privacy Policy & Info"
+                        )
+                    }
+                },
                 modifier = Modifier.statusBarsPadding(),
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -206,8 +219,7 @@ fun MainScreen() {
                             isGranted = false,
                             actionLabel = "Grant",
                             onActionClick = {
-                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
-                                context.startActivity(intent)
+                                showNotificationDisclosureDialog = true
                             }
                         )
                         Spacer(modifier = Modifier.height(6.dp))
@@ -226,6 +238,84 @@ fun MainScreen() {
                         )
                     }
                 }
+            }
+
+            if (showNotificationDisclosureDialog) {
+                AlertDialog(
+                    onDismissRequest = { showNotificationDisclosureDialog = false },
+                    title = {
+                        Text(
+                            text = "Yêu cầu quyền truy cập thông báo",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            Text(
+                                text = "Message Filter & Forwarder cần quyền Truy cập thông báo (Notification Listener) để thực hiện các tính năng cốt lõi:\n\n" +
+                                        "• Tự động trích xuất mã OTP và mã xác thực để hiển thị nút sao chép nhanh.\n" +
+                                        "• Lọc và chặn thông báo quảng cáo, tin rác theo từ khóa bạn cấu hình.\n" +
+                                        "• Gom nhóm và chuyển tiếp thông báo từ các ứng dụng được chọn.\n\n" +
+                                        "Cam kết bảo mật & quyền riêng tư:\n" +
+                                        "• Toàn bộ dữ liệu thông báo được xử lý 100% cục bộ trên thiết bị của bạn.\n" +
+                                        "• Ứng dụng hoạt động hoàn toàn ngoại tuyến (offline), KHÔNG thu thập, KHÔNG lưu trữ trên máy chủ và KHÔNG chia sẻ dữ liệu ra bên ngoài.",
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                showNotificationDisclosureDialog = false
+                                val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)
+                                context.startActivity(intent)
+                            }
+                        ) {
+                            Text("Đồng ý & Mở cài đặt")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showNotificationDisclosureDialog = false }) {
+                            Text("Để sau")
+                        }
+                    }
+                )
+            }
+
+            if (showPrivacyPolicyDialog) {
+                AlertDialog(
+                    onDismissRequest = { showPrivacyPolicyDialog = false },
+                    title = {
+                        Text(
+                            text = "Chính sách quyền riêng tư",
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                            Text(
+                                text = "Message Filter & Forwarder cam kết bảo vệ quyền riêng tư của bạn:\n\n" +
+                                        "1. Không thu thập dữ liệu:\n" +
+                                        "Ứng dụng không thu thập, không theo dõi, không gửi bất kỳ thông tin cá nhân hay nội dung tin nhắn nào của bạn lên mạng internet.\n\n" +
+                                        "2. Xử lý cục bộ 100%:\n" +
+                                        "Mọi quy trình phân tích tin nhắn, trích xuất OTP và lọc từ khóa đều chạy trực tiếp trên thiết bị của bạn.\n\n" +
+                                        "3. Quyền hạn ứng dụng:\n" +
+                                        "• Truy cập thông báo: Đọc tin nhắn đến để lọc và hiển thị mã OTP.\n" +
+                                        "• Đăng thông báo: Hiển thị các thông báo chuyển tiếp và nút hành động nhanh.\n" +
+                                        "• Quét danh sách ứng dụng: Cho phép bạn lựa chọn các ứng dụng cần lọc thông báo.\n\n" +
+                                        "Bạn có thể xem chi tiết tài liệu tại file PRIVACY_POLICY.md trong mã nguồn.",
+                                fontSize = 14.sp,
+                                lineHeight = 20.sp
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = { showPrivacyPolicyDialog = false }) {
+                            Text("Đã hiểu")
+                        }
+                    }
+                )
             }
 
             // Tabs: 3 Tabs (App Filters, History & Logs, Test & Simulator)
