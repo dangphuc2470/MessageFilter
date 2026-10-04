@@ -40,7 +40,8 @@ object AppFilterPreferences {
         "com.whatsapp.w4b",
         "com.google.android.apps.messaging",
         "com.android.mms",
-        "com.samsung.android.messaging"
+        "com.samsung.android.messaging",
+        "com.android.shell"
     )
     val DEFAULT_FORWARD_OTP_ONLY = setOf(
         "com.google.android.apps.messaging",

@@ -1545,8 +1545,43 @@ fun TestTabContent() {
             }
         }
 
+        // AI Group Debounce & Summarization Simulation
+        Text(text = "3. Thử nghiệm AI tóm tắt nhóm & debounce:", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedButton(
+                onClick = {
+                    val intent = android.content.Intent("com.phucdnh.messagefilter.SIMULATE_GROUP_BURST").apply {
+                        setPackage(context.packageName)
+                    }
+                    context.sendBroadcast(intent)
+                    testFeedbackMessage = "Đang gửi mô phỏng 5 tin nhắn dồn dập vào 'Nhóm Dự Án Alpha'..."
+                },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Spam bão tin nhóm (5 tin)", fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+
+            OutlinedButton(
+                onClick = {
+                    val intent = android.content.Intent("com.phucdnh.messagefilter.SIMULATE_GROUP_MENTION").apply {
+                        setPackage(context.packageName)
+                    }
+                    context.sendBroadcast(intent)
+                    testFeedbackMessage = "Đã gửi tin nhắn tag @Phúc khẩn cấp trong nhóm!"
+                },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("Tag @Phúc khẩn cấp", fontSize = 11.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            }
+        }
+
         // Sender / Title Input
-        Text(text = "3. Người gửi / Tiêu đề (Sender):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(text = "4. Người gửi / Tiêu đề (Sender):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
         OutlinedTextField(
             value = senderInput,
             onValueChange = { senderInput = it },
@@ -1558,7 +1593,7 @@ fun TestTabContent() {
         )
 
         // Message Content Input
-        Text(text = "4. Nội dung tin nhắn (Message Content):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+        Text(text = "5. Nội dung tin nhắn (Message Content):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
         OutlinedTextField(
             value = messageInput,
             onValueChange = { messageInput = it },

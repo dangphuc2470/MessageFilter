@@ -61,6 +61,15 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".receiver.SimulateMessageReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.phucdnh.messagefilter.SIMULATE_GROUP_BURST" />
+                <action android:name="com.phucdnh.messagefilter.SIMULATE_GROUP_MENTION" />
+            </intent-filter>
+        </receiver>
+
         <activity
             android:name=".receiver.OpenConversationActivity"
             android:exported="false"

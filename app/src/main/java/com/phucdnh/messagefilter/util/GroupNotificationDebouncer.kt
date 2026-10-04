@@ -75,8 +75,8 @@ object GroupNotificationDebouncer {
         sender: String,
         messageText: String,
         timestamp: Long,
-        originalContentIntent: PendingIntent?,
-        avatarBitmap: Bitmap?
+        originalContentIntent: PendingIntent? = null,
+        avatarBitmap: Bitmap? = null
     ): DebounceDecision {
         val userNicknames = AppFilterPreferences.getUserNicknames(context)
         val sessionKey = "$packageName:$groupTitle"
